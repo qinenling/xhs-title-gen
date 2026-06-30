@@ -15,7 +15,7 @@ export default function ProModal({ open, onClose, onActivated }: ProModalProps) 
   const [success, setSuccess] = useState("");
 
   const contactWechat =
-    process.env.NEXT_PUBLIC_CONTACT_WECHAT || "请配置微信号";
+    process.env.NEXT_PUBLIC_CONTACT_WECHAT || "未上线";
 
   if (!open) return null;
 
@@ -114,10 +114,9 @@ export default function ProModal({ open, onClose, onActivated }: ProModalProps) 
         <div className="rounded-xl border border-zinc-100 bg-zinc-50 p-4 text-center">
           <p className="text-sm font-medium text-zinc-700">购买 Pro</p>
           <p className="mt-1 text-xs text-zinc-500">
-            如需购买激活码，请添加微信：
-            <span className="font-mono text-rose-600"> {contactWechat}</span>
+            微信购买：
+            <span className="font-medium text-zinc-600"> {contactWechat}</span>
           </p>
-          <p className="mt-1 text-xs text-zinc-400">付款后 5 分钟内发卡</p>
         </div>
 
         <button
