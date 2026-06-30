@@ -14,6 +14,9 @@ export default function ProModal({ open, onClose, onActivated }: ProModalProps) 
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
+  const contactWechat =
+    process.env.NEXT_PUBLIC_CONTACT_WECHAT || "请配置微信号";
+
   if (!open) return null;
 
   async function handleActivate() {
@@ -87,9 +90,10 @@ export default function ProModal({ open, onClose, onActivated }: ProModalProps) 
           <input
             type="text"
             value={code}
-            onChange={(e) => setCode(e.target.value.toUpperCase())}
-            placeholder="例如：BAOTITLE-2026-XXXX"
-            className="w-full rounded-xl border border-zinc-200 px-4 py-3 text-sm font-mono uppercase tracking-wide focus:border-rose-400 focus:outline-none focus:ring-2 focus:ring-rose-100"
+            onChange={(e) => setCode(e.target.value.trim())}
+            autoComplete="off"
+            spellCheck={false}
+            className="w-full rounded-xl border border-zinc-200 px-4 py-3 text-sm focus:border-rose-400 focus:outline-none focus:ring-2 focus:ring-rose-100"
           />
           {error && (
             <p className="mt-2 text-sm text-red-500">{error}</p>
@@ -110,9 +114,10 @@ export default function ProModal({ open, onClose, onActivated }: ProModalProps) 
         <div className="rounded-xl border border-zinc-100 bg-zinc-50 p-4 text-center">
           <p className="text-sm font-medium text-zinc-700">购买 Pro</p>
           <p className="mt-1 text-xs text-zinc-500">
-            微信支付接入中。如需购买激活码，请添加微信：
-            <span className="font-mono text-rose-600"> baotitle-pro</span>
+            如需购买激活码，请添加微信：
+            <span className="font-mono text-rose-600"> {contactWechat}</span>
           </p>
+          <p className="mt-1 text-xs text-zinc-400">付款后 5 分钟内发卡</p>
         </div>
 
         <button

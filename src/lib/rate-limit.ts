@@ -71,3 +71,35 @@ export function consumeUsage(
     remaining: Math.max(0, FREE_DAILY_LIMIT - record.count),
   };
 }
+
+const ACTIVATE_DAILY_LIMIT = 10;
+const activateStore = new Map<string, DayUsage>();
+
+function getActivateRecord(key: string): DayUsage {
+  const today = todayKey();
+  const existing = activateStore.get(key);
+
+  if (!existing || existing.date !== today) {
+    const fresh = { date: today, count: 0 };
+    activateStore.set(key, fresh);
+    return fresh;
+  }
+
+  return existing;
+}
+
+/** 激活码尝试次数限制，防暴力试码 */
+export function consumeActivateAttempt(
+  request: Request
+): { allowed: boolean } {
+  const key = `activate:${getClientIp(request)}`;
+  const record = getActivateRecord(key);
+
+  if (record.count >= ACTIVATE_DAILY_LIMIT) {
+    return { allowed: false };
+  }
+
+  record.count += 1;
+  activateStore.set(key, record);
+  return { allowed: true };
+}

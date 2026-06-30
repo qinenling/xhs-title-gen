@@ -6,6 +6,7 @@ import {
   PRO_COOKIE,
   validateLicenseCode,
 } from "@/lib/pro";
+import { consumeActivateAttempt } from "@/lib/rate-limit";
 
 export async function GET(request: Request) {
   return NextResponse.json({ isPro: isProUser(request) });
@@ -13,6 +14,11 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    const attempt = consumeActivateAttempt(request);
+    if (!attempt.allowed) {
+      return NextResponse.json({ error: "请稍后再试" }, { status: 429 });
+    }
+
     const body = (await request.json()) as { code?: string };
     const code = body.code?.trim();
 
@@ -22,7 +28,7 @@ export async function POST(request: Request) {
 
     if (!validateLicenseCode(code)) {
       return NextResponse.json(
-        { error: "激活码无效，请检查后重试" },
+        { error: "激活码无效" },
         { status: 400 }
       );
     }
@@ -42,6 +48,6 @@ export async function POST(request: Request) {
       isPro: true,
     });
   } catch {
-    return NextResponse.json({ error: "激活失败，请重试" }, { status: 500 });
+    return NextResponse.json({ error: "激活失败" }, { status: 500 });
   }
 }
