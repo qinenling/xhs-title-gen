@@ -8,7 +8,15 @@ export function outlineToText(outline: NoteOutline, title: string): string {
     .map((s) => `【${s.heading}】\n${s.content}`)
     .join("\n\n");
 
-  return `${title}\n\n${outline.opening}\n\n${body}\n\n${outline.closing}\n\n${tags}\n\n📷 配图建议：${outline.imageTips}`;
+  const extras = [
+    outline.coverText ? `📌 封面文案：${outline.coverText}` : "",
+    outline.firstComment ? `💬 首评引导：${outline.firstComment}` : "",
+    outline.interactionHook ? `🗣️ 互动话术：${outline.interactionHook}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  return `${title}\n\n${outline.opening}\n\n${body}\n\n${outline.closing}\n\n${tags}\n\n📷 配图建议：${outline.imageTips}${extras ? `\n\n${extras}` : ""}`;
 }
 
 export function exportMarkdown(
@@ -28,7 +36,9 @@ export function exportMarkdown(
   lines.push(``, `## 备选标题`, ``);
 
   titles.forEach((t, i) => {
-    lines.push(`${i + 1}. **[${t.style}]** ${t.title}`);
+    lines.push(
+      `${i + 1}. **[${t.style}]** ${t.title} · 爆款指数 ${t.score ?? "-"}`
+    );
     lines.push(`   - ${t.reason}`);
   });
 
@@ -42,11 +52,18 @@ export function exportMarkdown(
       `## 标签`,
       ``,
       outline.hashtags.map((t) => `#${t.replace(/^#/, "")}`).join(" "),
-      ``,
-      `## 配图建议`,
-      ``,
-      outline.imageTips
+      ``
     );
+    if (outline.coverText) {
+      lines.push(`## 封面文案`, ``, outline.coverText, ``);
+    }
+    if (outline.firstComment) {
+      lines.push(`## 首评引导`, ``, outline.firstComment, ``);
+    }
+    if (outline.interactionHook) {
+      lines.push(`## 互动话术`, ``, outline.interactionHook, ``);
+    }
+    lines.push(`## 配图建议`, ``, outline.imageTips);
   }
 
   lines.push(``, `---`, `*由爆标题生成 · ${new Date().toLocaleDateString("zh-CN")}*`);

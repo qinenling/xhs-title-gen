@@ -97,6 +97,30 @@ export default function OutlinePanel({
           <p className="text-xs font-semibold text-amber-700 mb-1">📷 配图建议</p>
           <p className="text-sm text-amber-900/80">{outline.imageTips}</p>
         </section>
+
+        {(outline.coverText || outline.firstComment || outline.interactionHook) && (
+          <section className="rounded-xl bg-violet-50 p-4 border border-violet-100 space-y-3">
+            <p className="text-xs font-semibold text-violet-600">📦 完整笔记包</p>
+            {outline.coverText && (
+              <div>
+                <p className="text-[10px] font-medium text-violet-500 mb-0.5">封面文案</p>
+                <p className="text-sm font-semibold text-zinc-800">{outline.coverText}</p>
+              </div>
+            )}
+            {outline.firstComment && (
+              <div>
+                <p className="text-[10px] font-medium text-violet-500 mb-0.5">首评引导</p>
+                <p className="text-sm text-zinc-700">{outline.firstComment}</p>
+              </div>
+            )}
+            {outline.interactionHook && (
+              <div>
+                <p className="text-[10px] font-medium text-violet-500 mb-0.5">互动话术</p>
+                <p className="text-sm text-zinc-700">{outline.interactionHook}</p>
+              </div>
+            )}
+          </section>
+        )}
       </div>
     </div>
   );

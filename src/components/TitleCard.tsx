@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { GeneratedTitle, TitleStyle } from "@/lib/types";
+import ViralScoreBar from "./ViralScoreBar";
 
 export const STYLE_COLORS: Record<TitleStyle, string> = {
   种草型: "bg-rose-100 text-rose-700",
@@ -23,6 +24,7 @@ export default function TitleCard({
   selected = false,
   outlineLoading = false,
   favorited = false,
+  showRecommended = false,
   onGenerateOutline,
   onToggleFavorite,
 }: {
@@ -32,11 +34,13 @@ export default function TitleCard({
   selected?: boolean;
   outlineLoading?: boolean;
   favorited?: boolean;
+  showRecommended?: boolean;
   onGenerateOutline?: () => void;
   onToggleFavorite?: () => void;
 }) {
   const [copied, setCopied] = useState(false);
   const charCount = [...item.title].length;
+  const score = item.score ?? 75;
 
   async function handleCopy() {
     await navigator.clipboard.writeText(item.title);
@@ -53,8 +57,16 @@ export default function TitleCard({
       } ${compact ? "p-4" : "p-5"}`}
     >
       <div className="mb-3 flex items-center justify-between gap-2">
-        <span className="text-xs font-medium text-zinc-400">#{index + 1}</span>
         <div className="flex items-center gap-2">
+          <span className="text-xs font-medium text-zinc-400">#{index + 1}</span>
+          {showRecommended && (
+            <span className="rounded-full bg-gradient-to-r from-amber-400 to-orange-400 px-2 py-0.5 text-[10px] font-bold text-white">
+              推荐
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          {compact && <ViralScoreBar score={score} compact />}
           {onToggleFavorite && (
             <button
               type="button"
@@ -74,6 +86,8 @@ export default function TitleCard({
           </span>
         </div>
       </div>
+
+      {!compact && <ViralScoreBar score={score} />}
 
       <p
         className={`mb-2 font-semibold leading-snug text-zinc-900 ${

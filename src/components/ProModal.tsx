@@ -61,7 +61,7 @@ export default function ProModal({ open, onClose, onActivated }: ProModalProps) 
           <span className="text-4xl">👑</span>
           <h3 className="mt-3 text-xl font-bold text-zinc-900">升级 Pro 版</h3>
           <p className="mt-2 text-sm text-zinc-500">
-            无限生成 · 一次 10 条标题 · 正文大纲不限
+            无限生成 · 对标仿写 · 完整笔记包
           </p>
         </div>
 
@@ -72,13 +72,13 @@ export default function ProModal({ open, onClose, onActivated }: ProModalProps) 
           </div>
           <ul className="mt-4 space-y-2 text-sm text-zinc-600">
             <li className="flex items-center gap-2">
-              <span className="text-rose-500">✓</span> 无限次标题 + 大纲生成
+              <span className="text-rose-500">✓</span> 无限次标题 + 大纲 + 仿写
             </li>
             <li className="flex items-center gap-2">
-              <span className="text-rose-500">✓</span> 一次生成 10 条标题
+              <span className="text-rose-500">✓</span> 一次生成 10 条 · 爆款指数排序
             </li>
             <li className="flex items-center gap-2">
-              <span className="text-rose-500">✓</span> 优先体验新功能
+              <span className="text-rose-500">✓</span> 完整笔记包（首评+封面文案）
             </li>
           </ul>
         </div>

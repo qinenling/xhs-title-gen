@@ -3,13 +3,16 @@
 import { useCallback, useEffect, useState } from "react";
 import type { HistoryRecord } from "@/lib/history";
 import { fetchUsage, type UsageInfo } from "@/lib/client-usage";
+import { getTodayStats } from "@/lib/stats";
 import FavoritesPanel from "./FavoritesPanel";
 import FeatureHighlights from "./FeatureHighlights";
 import HistoryPanel from "./HistoryPanel";
+import ImitateGenerator from "./ImitateGenerator";
 import ProModal from "./ProModal";
-import TitleGenerator from "./TitleGenerator";
+import TitleGenerator, { type LimitReachedContext } from "./TitleGenerator";
+import UpgradePromptModal from "./UpgradePromptModal";
 
-type Tab = "generate" | "history" | "favorites";
+type Tab = "generate" | "imitate" | "history" | "favorites";
 
 interface ApiStatus {
   mode: "live" | "demo";
@@ -20,14 +23,25 @@ interface ApiStatus {
 export default function HomeClient() {
   const [tab, setTab] = useState<Tab>("generate");
   const [proOpen, setProOpen] = useState(false);
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const [upgradeContext, setUpgradeContext] = useState<LimitReachedContext>({
+    reason: "limit",
+    usedToday: 0,
+    savedMinutes: 0,
+  });
   const [status, setStatus] = useState<ApiStatus | null>(null);
   const [usage, setUsage] = useState<UsageInfo | null>(null);
+  const [savedMinutes, setSavedMinutes] = useState(0);
   const [restoreKey, setRestoreKey] = useState(0);
   const [restoreData, setRestoreData] = useState<{
     topic: string;
     keywords: string;
     prefillTitle?: string;
   } | null>(null);
+
+  const refreshStats = useCallback(() => {
+    setSavedMinutes(getTodayStats().savedMinutes);
+  }, []);
 
   const refreshUsage = useCallback(async () => {
     const data = await fetchUsage();
@@ -40,7 +54,13 @@ export default function HomeClient() {
       .then(setStatus)
       .catch(() => setStatus({ mode: "demo", model: null, provider: null }));
     refreshUsage();
-  }, [refreshUsage]);
+    refreshStats();
+  }, [refreshUsage, refreshStats]);
+
+  function handleLimitReached(context: LimitReachedContext) {
+    setUpgradeContext(context);
+    setUpgradeOpen(true);
+  }
 
   function handleRestore(record: HistoryRecord) {
     setRestoreData({ topic: record.topic, keywords: record.keywords });
@@ -69,6 +89,11 @@ export default function HomeClient() {
           </div>
 
           <div className="flex items-center gap-2">
+            {savedMinutes > 0 && !usage?.isPro && (
+              <span className="hidden sm:inline text-[10px] text-zinc-400">
+                今日已省 ~{savedMinutes} 分钟
+              </span>
+            )}
             {status && (
               <span
                 className={`hidden sm:inline rounded-full px-2.5 py-1 text-xs font-medium ${
@@ -101,6 +126,7 @@ export default function HomeClient() {
           {(
             [
               ["generate", "✨ 生成"],
+              ["imitate", "🎯 仿写"],
               ["history", "📋 历史"],
               ["favorites", "⭐ 收藏"],
             ] as const
@@ -129,7 +155,7 @@ export default function HomeClient() {
                 小红书爆款标题生成器
               </h1>
               <p className="text-sm text-zinc-500 sm:text-base">
-                10 种风格 · 24 个选题 · 复制即用
+                爆款指数 · 10 种风格 · 完整笔记包
               </p>
             </div>
 
@@ -140,8 +166,26 @@ export default function HomeClient() {
               initialTopic={restoreData?.topic}
               initialKeywords={restoreData?.keywords}
               isPro={usage?.isPro ?? false}
-              onLimitReached={() => setProOpen(true)}
+              onLimitReached={handleLimitReached}
               onUsageChange={setUsage}
+              onStatsChange={refreshStats}
+            />
+          </>
+        ) : tab === "imitate" ? (
+          <>
+            <div className="mb-6 text-center">
+              <h1 className="mb-2 text-2xl font-bold tracking-tight text-zinc-900 sm:text-3xl">
+                对标爆款仿写
+              </h1>
+              <p className="text-sm text-zinc-500 sm:text-base">
+                粘贴爆款标题，AI 拆解结构并生成同套路新标题
+              </p>
+            </div>
+            <ImitateGenerator
+              isPro={usage?.isPro ?? false}
+              onLimitReached={handleLimitReached}
+              onUsageChange={setUsage}
+              onStatsChange={refreshStats}
             />
           </>
         ) : tab === "history" ? (
@@ -168,9 +212,18 @@ export default function HomeClient() {
 
         <footer className="mt-16 text-center text-xs text-zinc-400 space-y-1">
           <p>{usage?.isPro ? "Pro 会员 · 感谢支持" : "免费版每日 10 次 · Pro 版无限生成"}</p>
-          <p>爆标题 · 小红书创作者效率工具</p>
+          <p>爆标题 · baotitle.asia · 小红书创作者效率工具</p>
         </footer>
       </main>
+
+      <UpgradePromptModal
+        open={upgradeOpen}
+        onClose={() => setUpgradeOpen(false)}
+        onUpgrade={() => setProOpen(true)}
+        usedToday={upgradeContext.usedToday}
+        savedMinutes={upgradeContext.savedMinutes}
+        reason={upgradeContext.reason}
+      />
 
       <ProModal
         open={proOpen}

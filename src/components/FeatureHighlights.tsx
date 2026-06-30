@@ -1,8 +1,8 @@
 export default function FeatureHighlights() {
   const items = [
-    { icon: "✨", title: "10 种爆款风格", desc: "种草/干货/悬念/对比/清单等" },
-    { icon: "📝", title: "正文大纲", desc: "结构 + 标签 + 配图建议" },
-    { icon: "📋", title: "24 个选题模板", desc: "一键填入，覆盖主流赛道" },
+    { icon: "📊", title: "爆款指数", desc: "每条标题 AI 评分排序" },
+    { icon: "🎯", title: "对标仿写", desc: "粘贴爆款，同结构出新标题" },
+    { icon: "📦", title: "完整笔记包", desc: "大纲+标签+首评+封面文案" },
     { icon: "⚡", title: "历史 & 收藏", desc: "本地保存，随时复用" },
   ];
 

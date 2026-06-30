@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { GeneratedTitle, NoteOutline, TitleStyle } from "@/lib/types";
 import { TITLE_STYLES, DEFAULT_STYLES } from "@/lib/types";
 import { saveToHistory } from "@/lib/history";
@@ -8,17 +8,26 @@ import { fetchUsage, type UsageInfo } from "@/lib/client-usage";
 import { FREE_TITLE_COUNT, PRO_TITLE_COUNT } from "@/lib/constants";
 import { exportMarkdown, outlineToText } from "@/lib/format";
 import { getFavorites, toggleFavorite } from "@/lib/favorites";
+import { recordGeneration, getTodayStats } from "@/lib/stats";
 import LoadingSkeleton from "./LoadingSkeleton";
 import OutlinePanel from "./OutlinePanel";
 import TitleCard from "./TitleCard";
 import TopicTemplates from "./TopicTemplates";
+import DemoPreview from "./DemoPreview";
+
+export interface LimitReachedContext {
+  reason: "limit" | "celebrate";
+  usedToday: number;
+  savedMinutes: number;
+}
 
 interface TitleGeneratorProps {
   initialTopic?: string;
   initialKeywords?: string;
   isPro?: boolean;
-  onLimitReached?: () => void;
+  onLimitReached?: (context: LimitReachedContext) => void;
   onUsageChange?: (usage: UsageInfo) => void;
+  onStatsChange?: () => void;
 }
 
 export default function TitleGenerator({
@@ -27,6 +36,7 @@ export default function TitleGenerator({
   isPro = false,
   onLimitReached,
   onUsageChange,
+  onStatsChange,
 }: TitleGeneratorProps) {
   const [topic, setTopic] = useState(initialTopic);
   const [keywords, setKeywords] = useState(initialKeywords);
@@ -36,16 +46,21 @@ export default function TitleGenerator({
   const [error, setError] = useState("");
   const [remaining, setRemaining] = useState<number | null>(null);
   const [copiedAll, setCopiedAll] = useState(false);
+  const [showDemo, setShowDemo] = useState(true);
 
   const [outline, setOutline] = useState<NoteOutline | null>(null);
   const [outlineTitle, setOutlineTitle] = useState("");
   const [outlineLoadingIndex, setOutlineLoadingIndex] = useState<number | null>(
     null
   );
+  const [fullPackLoading, setFullPackLoading] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [exported, setExported] = useState(false);
   const [mdExported, setMdExported] = useState(false);
   const [favoriteTitles, setFavoriteTitles] = useState<Set<string>>(new Set());
+
+  const formRef = useRef<HTMLDivElement>(null);
+  const resultsRef = useRef<HTMLDivElement>(null);
 
   const titleCount = isPro ? PRO_TITLE_COUNT : FREE_TITLE_COUNT;
 
@@ -65,6 +80,11 @@ export default function TitleGenerator({
     if (initialKeywords) setKeywords(initialKeywords);
   }, [initialTopic, initialKeywords]);
 
+  function showLimitReached(reason: "limit" | "celebrate") {
+    const { count, savedMinutes } = getTodayStats();
+    onLimitReached?.({ reason, usedToday: count, savedMinutes });
+  }
+
   function toggleStyle(style: TitleStyle) {
     setStyles((prev) => {
       if (prev.includes(style)) {
@@ -80,18 +100,27 @@ export default function TitleGenerator({
     setKeywords(k);
     setOutline(null);
     setSelectedIndex(null);
+    setShowDemo(false);
+  }
+
+  function handleTryDemo(t: string, k: string) {
+    setTopic(t);
+    setKeywords(k);
+    setShowDemo(false);
+    formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   function handleLimitError(res: Response, data: { error?: string }) {
     if (res.status === 429) {
       setRemaining(0);
-      onLimitReached?.();
+      showLimitReached("limit");
     }
     throw new Error(data.error || "请求失败");
   }
 
   async function runGenerate(clearPrevious: boolean) {
     setError("");
+    setShowDemo(false);
 
     if (!topic.trim()) {
       setError("请先填写笔记主题");
@@ -100,7 +129,7 @@ export default function TitleGenerator({
 
     if (!isPro && remaining === 0) {
       setError("今日免费次数已用完");
-      onLimitReached?.();
+      showLimitReached("limit");
       return;
     }
 
@@ -129,11 +158,21 @@ export default function TitleGenerator({
         handleLimitError(res, data);
       }
 
+      const usedToday = recordGeneration();
+      onStatsChange?.();
+
       setTitles(data.titles);
       if (data.isPro) {
         setRemaining(null);
       } else {
         setRemaining(data.remaining);
+        if (data.remaining === 0) {
+          onLimitReached?.({
+            reason: "celebrate",
+            usedToday,
+            savedMinutes: usedToday * 8,
+          });
+        }
       }
       onUsageChange?.({
         isPro: data.isPro,
@@ -142,6 +181,10 @@ export default function TitleGenerator({
         limit: 10,
       });
       saveToHistory(topic.trim(), keywords.trim(), data.titles);
+
+      setTimeout(() => {
+        resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 100);
     } catch (err) {
       setError(err instanceof Error ? err.message : "生成失败，请重试");
     } finally {
@@ -154,7 +197,7 @@ export default function TitleGenerator({
 
     if (!isPro && remaining === 0) {
       setError("今日免费次数已用完");
-      onLimitReached?.();
+      showLimitReached("limit");
       return;
     }
 
@@ -180,24 +223,50 @@ export default function TitleGenerator({
         handleLimitError(res, data);
       }
 
+      const usedToday = recordGeneration();
+      onStatsChange?.();
+
       setOutline(data.outline);
       setOutlineTitle(item.title);
       if (data.isPro) {
         setRemaining(null);
       } else {
         setRemaining(data.remaining);
+        if (data.remaining === 0) {
+          onLimitReached?.({
+            reason: "celebrate",
+            usedToday,
+            savedMinutes: usedToday * 8,
+          });
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "大纲生成失败，请重试");
       setSelectedIndex(null);
     } finally {
       setOutlineLoadingIndex(null);
+      setFullPackLoading(false);
     }
+  }
+
+  async function handleFullPack() {
+    if (titles.length === 0) return;
+
+    const bestIndex = titles.reduce(
+      (best, t, i) => ((t.score ?? 0) > (titles[best].score ?? 0) ? i : best),
+      0
+    );
+
+    setFullPackLoading(true);
+    await handleGenerateOutline(titles[bestIndex], bestIndex);
   }
 
   async function handleCopyAll() {
     const text = titles
-      .map((t, i) => `${i + 1}. [${t.style}] ${t.title}`)
+      .map(
+        (t, i) =>
+          `${i + 1}. [${t.score ?? "-"}分·${t.style}] ${t.title}`
+      )
       .join("\n");
     await navigator.clipboard.writeText(text);
     setCopiedAll(true);
@@ -232,7 +301,7 @@ export default function TitleGenerator({
     if (!outline) return;
     const text = outlineToText(outline, outlineTitle);
     const allTitles = titles
-      .map((t, i) => `${i + 1}. [${t.style}] ${t.title}`)
+      .map((t, i) => `${i + 1}. [${t.score ?? "-"}分·${t.style}] ${t.title}`)
       .join("\n");
     const pack = `【备选标题】\n${allTitles}\n\n【正文】\n${text}`;
     await navigator.clipboard.writeText(pack);
@@ -240,9 +309,25 @@ export default function TitleGenerator({
     setTimeout(() => setExported(false), 2000);
   }
 
+  const bestScoreIndex =
+    titles.length > 0
+      ? titles.reduce(
+          (best, t, i) =>
+            (t.score ?? 0) > (titles[best].score ?? 0) ? i : best,
+          0
+        )
+      : -1;
+
   return (
     <div className="mx-auto w-full max-w-2xl">
-      <div className="mb-8 rounded-2xl border border-rose-100 bg-white p-6 shadow-sm">
+      {showDemo && titles.length === 0 && !loading && (
+        <DemoPreview onTryDemo={handleTryDemo} />
+      )}
+
+      <div
+        ref={formRef}
+        className="mb-8 rounded-2xl border border-rose-100 bg-white p-6 shadow-sm"
+      >
         <TopicTemplates onSelect={applyTemplate} />
 
         <label className="mb-2 block text-sm font-medium text-zinc-700">
@@ -319,7 +404,7 @@ export default function TitleGenerator({
         >
           {loading
             ? "正在生成爆款标题…"
-            : `✨ 生成 ${titleCount} 条标题`}
+            : `✨ 生成 ${titleCount} 条标题（含爆款指数）`}
         </button>
 
         {error && (
@@ -335,7 +420,7 @@ export default function TitleGenerator({
               {remaining !== null && remaining <= 3 && remaining > 0 && (
                 <button
                   type="button"
-                  onClick={() => onLimitReached?.()}
+                  onClick={() => showLimitReached("limit")}
                   className="ml-2 text-rose-500 hover:underline"
                 >
                   升级 Pro
@@ -349,10 +434,21 @@ export default function TitleGenerator({
       {loading && titles.length === 0 && <LoadingSkeleton />}
 
       {titles.length > 0 && (
-        <div>
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <h2 className="text-lg font-semibold text-zinc-800">生成结果</h2>
-            <div className="flex gap-2">
+        <div ref={resultsRef}>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold text-zinc-800">生成结果</h2>
+              <p className="text-xs text-zinc-400">按爆款指数从高到低排序</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={handleFullPack}
+                disabled={fullPackLoading || outlineLoadingIndex !== null}
+                className="rounded-lg bg-gradient-to-r from-violet-500 to-purple-500 px-3 py-1.5 text-sm font-medium text-white hover:from-violet-600 hover:to-purple-600 transition disabled:opacity-50"
+              >
+                {fullPackLoading ? "生成中…" : "📦 一键完整笔记包"}
+              </button>
               <button
                 type="button"
                 onClick={handleCopyAll}
@@ -372,7 +468,7 @@ export default function TitleGenerator({
           </div>
 
           <p className="mb-4 text-sm text-zinc-500">
-            选中一条标题，点击「写正文」生成完整大纲
+            「完整笔记包」自动选用爆款指数最高的标题，生成大纲 + 标签 + 首评话术
           </p>
 
           <div className="space-y-4">
@@ -384,6 +480,7 @@ export default function TitleGenerator({
                 selected={selectedIndex === i}
                 outlineLoading={outlineLoadingIndex === i}
                 favorited={favoriteTitles.has(item.title)}
+                showRecommended={i === bestScoreIndex}
                 onToggleFavorite={() => handleToggleFavorite(item)}
                 onGenerateOutline={() => handleGenerateOutline(item, i)}
               />
