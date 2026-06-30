@@ -3,7 +3,11 @@
 import { useCallback, useEffect, useState } from "react";
 import type { GeneratedTitle } from "@/lib/types";
 import { fetchUsage, type UsageInfo } from "@/lib/client-usage";
-import { FREE_TITLE_COUNT, PRO_TITLE_COUNT } from "@/lib/constants";
+import {
+  FREE_DAILY_LIMIT,
+  FREE_TITLE_COUNT,
+  PRO_TITLE_COUNT,
+} from "@/lib/constants";
 import { recordGeneration, getTodayStats } from "@/lib/stats";
 import { getFavorites, toggleFavorite } from "@/lib/favorites";
 import { scanTitles } from "@/lib/sensitive-words";
@@ -114,7 +118,7 @@ export default function ImitateGenerator({
         isPro: data.isPro,
         remaining: data.remaining,
         used: 0,
-        limit: 10,
+        limit: FREE_DAILY_LIMIT,
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "生成失败，请重试");
@@ -188,7 +192,7 @@ export default function ImitateGenerator({
           {isPro ? (
             <span className="text-violet-600 font-medium">👑 Pro · 无限仿写</span>
           ) : (
-            <>消耗 1 次额度 · 今日剩余 {remaining ?? "…"} / 10 次</>
+            <>消耗 1 次额度 · 今日剩余 {remaining ?? "…"} / {FREE_DAILY_LIMIT} 次</>
           )}
         </p>
       </div>

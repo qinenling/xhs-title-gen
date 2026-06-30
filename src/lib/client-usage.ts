@@ -1,3 +1,5 @@
+import { FREE_DAILY_LIMIT } from "./constants";
+
 export interface UsageInfo {
   isPro: boolean;
   isLifetime?: boolean;
@@ -13,9 +15,9 @@ export async function fetchUsage(): Promise<UsageInfo> {
     return {
       isPro: false,
       isLifetime: false,
-      remaining: 10,
+      remaining: FREE_DAILY_LIMIT,
       used: 0,
-      limit: 10,
+      limit: FREE_DAILY_LIMIT,
       expiresAt: null,
     };
   }

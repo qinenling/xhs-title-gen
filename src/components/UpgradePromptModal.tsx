@@ -1,6 +1,6 @@
 "use client";
 
-import { PRO_PRICE_LABEL } from "@/lib/constants";
+import { FREE_DAILY_LIMIT, PRO_PRICE_LABEL } from "@/lib/constants";
 
 interface UpgradePromptModalProps {
   open: boolean;
@@ -40,7 +40,7 @@ export default function UpgradePromptModal({
           <p className="mt-2 text-sm text-zinc-500">
             {isCelebrate
               ? `你已生成 ${usedToday} 次，相当于节省约 ${savedMinutes} 分钟`
-              : "免费版每日 10 次，明天 0 点重置"}
+              : `免费版每日 ${FREE_DAILY_LIMIT} 次，明天 0 点重置`}
           </p>
         </div>
 

@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import Analytics from "@/components/Analytics";
+import InstallPrompt from "@/components/InstallPrompt";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -45,8 +46,10 @@ export const metadata: Metadata = {
   robots: { index: true, follow: true },
   appleWebApp: {
     capable: true,
+    title: "爆标题",
     statusBarStyle: "default",
   },
+  applicationName: "爆标题",
   other: {
     "format-detection": "telephone=no",
   },
@@ -72,6 +75,7 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         {children}
+        <InstallPrompt />
         <Analytics />
       </body>
     </html>

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { TitleStyle } from "@/lib/types";
 import type { HistoryRecord } from "@/lib/history";
 import { fetchUsage, type UsageInfo } from "@/lib/client-usage";
+import { FREE_DAILY_LIMIT } from "@/lib/constants";
 import { getTodayStats } from "@/lib/stats";
 import CalendarPanel from "./CalendarPanel";
 import FavoritesPanel from "./FavoritesPanel";
@@ -260,7 +261,7 @@ export default function HomeClient() {
           <p>
             {usage?.isPro
               ? "Pro 永久会员 · 感谢支持"
-              : "免费版每日 10 次 · Pro 永久买断无限生成"}
+              : `免费版每日 ${FREE_DAILY_LIMIT} 次 · Pro 永久买断无限生成`}
           </p>
           <p>爆标题 · baotitle.asia · 小红书创作者效率工具</p>
           <button

@@ -5,7 +5,11 @@ import type { GeneratedTitle, NoteOutline, TitleStyle } from "@/lib/types";
 import { TITLE_STYLES, DEFAULT_STYLES } from "@/lib/types";
 import { saveToHistory } from "@/lib/history";
 import { fetchUsage, type UsageInfo } from "@/lib/client-usage";
-import { FREE_TITLE_COUNT, PRO_TITLE_COUNT } from "@/lib/constants";
+import {
+  FREE_DAILY_LIMIT,
+  FREE_TITLE_COUNT,
+  PRO_TITLE_COUNT,
+} from "@/lib/constants";
 import { exportMarkdown, exportTitlesCsv, outlineToText } from "@/lib/format";
 import { getFavorites, toggleFavorite } from "@/lib/favorites";
 import { recordGeneration, getTodayStats } from "@/lib/stats";
@@ -203,7 +207,7 @@ export default function TitleGenerator({
         isPro: data.isPro,
         remaining: data.remaining,
         used: 0,
-        limit: 10,
+        limit: FREE_DAILY_LIMIT,
       });
       saveToHistory(topic.trim(), keywords.trim(), data.titles);
 
@@ -472,7 +476,7 @@ export default function TitleGenerator({
             <span className="text-rose-500 font-medium">👑 Pro 永久 · 无限生成</span>
           ) : (
             <>
-              今日剩余：{remaining ?? "…"} / 10 次
+              今日剩余：{remaining ?? "…"} / {FREE_DAILY_LIMIT} 次
               {remaining !== null && remaining <= 3 && remaining > 0 && (
                 <button
                   type="button"
