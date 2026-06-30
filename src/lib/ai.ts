@@ -1,7 +1,10 @@
-import type { GeneratedTitle, NoteOutline, TitleStyle } from "./types";
+import type { AiSensitiveHit } from "./sensitive-words";
+import type { CalendarDay, GeneratedTitle, NoteOutline, TitleStyle } from "./types";
 import {
+  buildCalendarPrompt,
   buildImitatePrompt,
   buildOutlinePrompt,
+  buildSensitiveScanPrompt,
   buildTitlePrompt,
 } from "./prompts";
 
@@ -277,4 +280,79 @@ export async function generateOutline(
     0.8
   );
   return parseOutline(content);
+}
+
+const DEMO_CALENDAR: CalendarDay[] = [
+  { day: 1, topic: "新手入门必看清单", suggestedStyle: "清单型", hook: "降低门槛，适合吸粉" },
+  { day: 2, topic: "真实踩坑经历分享", suggestedStyle: "故事型", hook: "共鸣感强，评论量高" },
+  { day: 3, topic: "3 个实用小技巧", suggestedStyle: "干货型", hook: "收藏率高" },
+  { day: 4, topic: "平价 vs 贵价对比测评", suggestedStyle: "对比型", hook: "引发讨论" },
+  { day: 5, topic: "一周使用变化记录", suggestedStyle: "种草型", hook: "真实感，转化好" },
+  { day: 6, topic: "90% 的人不知道的细节", suggestedStyle: "悬念型", hook: "点击率高" },
+  { day: 7, topic: "粉丝问答合集", suggestedStyle: "提问型", hook: "互动拉满" },
+];
+
+function parseCalendar(content: string): CalendarDay[] {
+  const jsonMatch = content.match(/\[[\s\S]*\]/);
+  if (!jsonMatch) {
+    throw new Error("AI 返回格式异常，请重试");
+  }
+
+  const parsed = JSON.parse(jsonMatch[0]) as CalendarDay[];
+
+  if (!Array.isArray(parsed) || parsed.length === 0) {
+    throw new Error("未生成有效选题，请重试");
+  }
+
+  return parsed.slice(0, 7).map((item, i) => ({
+    day: item.day ?? i + 1,
+    topic: String(item.topic).trim(),
+    suggestedStyle: (item.suggestedStyle || "干货型") as TitleStyle,
+    hook: String(item.hook || "").trim(),
+  }));
+}
+
+export async function generateCalendar(
+  niche: string,
+  keywords: string
+): Promise<CalendarDay[]> {
+  if (!process.env.OPENAI_API_KEY) {
+    await new Promise((r) => setTimeout(r, 900));
+    const subject = niche.slice(0, 6) || "这个赛道";
+    return DEMO_CALENDAR.map((d) => ({
+      ...d,
+      topic: `${subject}${d.topic}`,
+    }));
+  }
+
+  const content = await chatCompletion(
+    buildCalendarPrompt(niche, keywords),
+    0.85
+  );
+  return parseCalendar(content);
+}
+
+export async function scanSensitiveWithAI(
+  text: string
+): Promise<AiSensitiveHit[]> {
+  if (!process.env.OPENAI_API_KEY || !text.trim()) {
+    return [];
+  }
+
+  try {
+    const content = await chatCompletion(buildSensitiveScanPrompt(text), 0.3);
+    const jsonMatch = content.match(/\[[\s\S]*\]/);
+    if (!jsonMatch) return [];
+
+    const parsed = JSON.parse(jsonMatch[0]) as AiSensitiveHit[];
+    if (!Array.isArray(parsed)) return [];
+
+    return parsed.slice(0, 8).map((item) => ({
+      word: String(item.word || "").trim(),
+      suggestion: String(item.suggestion || "").trim(),
+      reason: String(item.reason || "").trim(),
+    })).filter((item) => item.word);
+  } catch {
+    return [];
+  }
 }

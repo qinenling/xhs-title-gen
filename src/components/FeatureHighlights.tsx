@@ -1,9 +1,9 @@
 export default function FeatureHighlights() {
   const items = [
-    { icon: "📊", title: "爆款指数", desc: "每条标题 AI 评分排序" },
-    { icon: "🎯", title: "对标仿写", desc: "粘贴爆款，同结构出新标题" },
-    { icon: "📦", title: "完整笔记包", desc: "大纲+标签+首评+封面文案" },
-    { icon: "⚡", title: "历史 & 收藏", desc: "本地保存，随时复用" },
+    { icon: "📊", title: "爆款指数", desc: "AI 评分自动排序" },
+    { icon: "⚖️", title: "A/B 对比", desc: "两条标题并排预览" },
+    { icon: "🛡️", title: "敏感词检测", desc: "规则 + AI 双重审核" },
+    { icon: "📊", title: "CSV 导出", desc: "Excel 直接打开" },
   ];
 
   return (

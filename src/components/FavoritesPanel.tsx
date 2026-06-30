@@ -7,10 +7,11 @@ import {
   getFavorites,
   removeFavorite,
 } from "@/lib/favorites";
+import type { TitleStyle } from "@/lib/types";
 import TitleCard from "./TitleCard";
 
 interface FavoritesPanelProps {
-  onUseTitle: (title: string, topic: string) => void;
+  onUseTitle: (title: string, topic: string, style: TitleStyle) => void;
 }
 
 export default function FavoritesPanel({ onUseTitle }: FavoritesPanelProps) {
@@ -59,7 +60,7 @@ export default function FavoritesPanel({ onUseTitle }: FavoritesPanelProps) {
           <div className="mt-2 flex gap-2 px-1">
             <button
               type="button"
-              onClick={() => onUseTitle(item.title, item.topic)}
+              onClick={() => onUseTitle(item.title, item.topic, item.style)}
               className="rounded-lg bg-rose-50 px-3 py-1.5 text-xs font-medium text-rose-600 hover:bg-rose-100 transition"
             >
               用这个标题写正文

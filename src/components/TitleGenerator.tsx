@@ -6,13 +6,17 @@ import { TITLE_STYLES, DEFAULT_STYLES } from "@/lib/types";
 import { saveToHistory } from "@/lib/history";
 import { fetchUsage, type UsageInfo } from "@/lib/client-usage";
 import { FREE_TITLE_COUNT, PRO_TITLE_COUNT } from "@/lib/constants";
-import { exportMarkdown, outlineToText } from "@/lib/format";
+import { exportMarkdown, exportTitlesCsv, outlineToText } from "@/lib/format";
 import { getFavorites, toggleFavorite } from "@/lib/favorites";
 import { recordGeneration, getTodayStats } from "@/lib/stats";
+import { scanTitles } from "@/lib/sensitive-words";
 import LoadingSkeleton from "./LoadingSkeleton";
 import OutlinePanel from "./OutlinePanel";
+import PhonePreviewModal from "./PhonePreviewModal";
+import SensitiveWordPanel from "./SensitiveWordPanel";
 import TitleCard from "./TitleCard";
 import TopicTemplates from "./TopicTemplates";
+import CompareModal from "./CompareModal";
 import DemoPreview from "./DemoPreview";
 
 export interface LimitReachedContext {
@@ -24,6 +28,8 @@ export interface LimitReachedContext {
 interface TitleGeneratorProps {
   initialTopic?: string;
   initialKeywords?: string;
+  initialPrefillTitle?: string;
+  initialPrefillStyle?: TitleStyle;
   isPro?: boolean;
   onLimitReached?: (context: LimitReachedContext) => void;
   onUsageChange?: (usage: UsageInfo) => void;
@@ -33,6 +39,8 @@ interface TitleGeneratorProps {
 export default function TitleGenerator({
   initialTopic = "",
   initialKeywords = "",
+  initialPrefillTitle = "",
+  initialPrefillStyle,
   isPro = false,
   onLimitReached,
   onUsageChange,
@@ -58,9 +66,18 @@ export default function TitleGenerator({
   const [exported, setExported] = useState(false);
   const [mdExported, setMdExported] = useState(false);
   const [favoriteTitles, setFavoriteTitles] = useState<Set<string>>(new Set());
+  const [previewTitle, setPreviewTitle] = useState<string | null>(null);
+  const [previewCover, setPreviewCover] = useState<string | undefined>();
+  const [comparePick, setComparePick] = useState<number[]>([]);
+  const [compareOpen, setCompareOpen] = useState(false);
+  const [csvExported, setCsvExported] = useState(false);
 
   const formRef = useRef<HTMLDivElement>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
+  const prefillHandled = useRef(false);
+  const outlineHandlerRef = useRef<
+    ((item: GeneratedTitle, index: number) => Promise<void>) | null
+  >(null);
 
   const titleCount = isPro ? PRO_TITLE_COUNT : FREE_TITLE_COUNT;
 
@@ -79,6 +96,14 @@ export default function TitleGenerator({
     if (initialTopic) setTopic(initialTopic);
     if (initialKeywords) setKeywords(initialKeywords);
   }, [initialTopic, initialKeywords]);
+
+  function toggleComparePick(index: number) {
+    setComparePick((prev) => {
+      if (prev.includes(index)) return prev.filter((i) => i !== index);
+      if (prev.length >= 2) return [prev[1], index];
+      return [...prev, index];
+    });
+  }
 
   function showLimitReached(reason: "limit" | "celebrate") {
     const { count, savedMinutes } = getTodayStats();
@@ -249,6 +274,24 @@ export default function TitleGenerator({
     }
   }
 
+  outlineHandlerRef.current = handleGenerateOutline;
+
+  useEffect(() => {
+    if (!initialPrefillTitle || prefillHandled.current) return;
+    if (!isPro && remaining === null) return;
+
+    prefillHandled.current = true;
+    const item: GeneratedTitle = {
+      title: initialPrefillTitle,
+      style: initialPrefillStyle || "干货型",
+      reason: "来自收藏",
+      score: 0,
+    };
+    setTitles([item]);
+    setShowDemo(false);
+    void outlineHandlerRef.current?.(item, 0);
+  }, [initialPrefillTitle, initialPrefillStyle, isPro, remaining]);
+
   async function handleFullPack() {
     if (titles.length === 0) return;
 
@@ -307,6 +350,19 @@ export default function TitleGenerator({
     await navigator.clipboard.writeText(pack);
     setExported(true);
     setTimeout(() => setExported(false), 2000);
+  }
+
+  function handleExportCsv() {
+    const csv = exportTitlesCsv(topic.trim(), titles);
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `爆标题-${topic.trim().slice(0, 10) || "笔记"}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setCsvExported(true);
+    setTimeout(() => setCsvExported(false), 2000);
   }
 
   const bestScoreIndex =
@@ -413,7 +469,7 @@ export default function TitleGenerator({
 
         <p className="mt-3 text-center text-xs text-zinc-400">
           {isPro ? (
-            <span className="text-rose-500 font-medium">👑 Pro 会员 · 无限生成</span>
+            <span className="text-rose-500 font-medium">👑 Pro 永久 · 无限生成</span>
           ) : (
             <>
               今日剩余：{remaining ?? "…"} / 10 次
@@ -451,6 +507,13 @@ export default function TitleGenerator({
               </button>
               <button
                 type="button"
+                onClick={handleExportCsv}
+                className="rounded-lg border border-emerald-200 px-3 py-1.5 text-sm font-medium text-emerald-700 hover:bg-emerald-50 transition"
+              >
+                {csvExported ? "已导出 ✓" : "📊 导出 CSV"}
+              </button>
+              <button
+                type="button"
                 onClick={handleCopyAll}
                 className="rounded-lg border border-rose-200 px-3 py-1.5 text-sm font-medium text-rose-600 hover:bg-rose-50 transition"
               >
@@ -471,6 +534,35 @@ export default function TitleGenerator({
             「完整笔记包」自动选用爆款指数最高的标题，生成大纲 + 标签 + 首评话术
           </p>
 
+          <SensitiveWordPanel
+            hitsByTitle={scanTitles(titles.map((t) => t.title))}
+          />
+
+          {comparePick.length > 0 && (
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-blue-50 border border-blue-100 px-4 py-3">
+              <p className="text-sm text-blue-700">
+                已选 {comparePick.length}/2 条标题用于 A/B 对比
+              </p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setComparePick([])}
+                  className="text-xs text-zinc-500 hover:text-zinc-700"
+                >
+                  清空
+                </button>
+                <button
+                  type="button"
+                  disabled={comparePick.length < 2}
+                  onClick={() => setCompareOpen(true)}
+                  className="rounded-lg bg-blue-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-600 disabled:opacity-50"
+                >
+                  查看对比
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="space-y-4">
             {titles.map((item, i) => (
               <TitleCard
@@ -481,8 +573,14 @@ export default function TitleGenerator({
                 outlineLoading={outlineLoadingIndex === i}
                 favorited={favoriteTitles.has(item.title)}
                 showRecommended={i === bestScoreIndex}
+                compareSelected={comparePick.includes(i)}
+                onCompareToggle={() => toggleComparePick(i)}
                 onToggleFavorite={() => handleToggleFavorite(item)}
                 onGenerateOutline={() => handleGenerateOutline(item, i)}
+                onPreview={() => {
+                  setPreviewTitle(item.title);
+                  setPreviewCover(outline?.coverText);
+                }}
               />
             ))}
           </div>
@@ -517,6 +615,26 @@ export default function TitleGenerator({
           )}
         </div>
       )}
+
+      <PhonePreviewModal
+        open={previewTitle !== null}
+        title={previewTitle || ""}
+        coverText={
+          previewTitle === outlineTitle ? outline?.coverText : previewCover
+        }
+        onClose={() => setPreviewTitle(null)}
+      />
+
+      <CompareModal
+        open={compareOpen}
+        titleA={
+          comparePick[0] !== undefined ? titles[comparePick[0]] ?? null : null
+        }
+        titleB={
+          comparePick[1] !== undefined ? titles[comparePick[1]] ?? null : null
+        }
+        onClose={() => setCompareOpen(false)}
+      />
     </div>
   );
 }

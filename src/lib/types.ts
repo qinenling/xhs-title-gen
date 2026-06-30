@@ -87,3 +87,15 @@ export interface GenerateResponse {
   titles: GeneratedTitle[];
   remaining: number;
 }
+
+export interface CalendarDay {
+  day: number;
+  topic: string;
+  suggestedStyle: TitleStyle;
+  hook: string;
+}
+
+export interface CalendarRequest {
+  niche: string;
+  keywords?: string;
+}

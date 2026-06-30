@@ -139,3 +139,49 @@ ${keywords ? `- 关键词/卖点：${keywords}` : ""}
   "coverText": "封面短文案"
 }`;
 }
+
+export function buildCalendarPrompt(niche: string, keywords: string): string {
+  return `你是资深小红书内容策划，擅长为博主规划一周选题。
+
+## 任务
+为「${niche}」赛道规划 7 天小红书图文选题，每天 1 个不重复的具体选题。
+
+${keywords ? `## 补充信息\n${keywords}` : ""}
+
+## 要求
+1. 7 天选题角度各不相同（教程/测评/清单/故事/避坑/对比/日常等）
+2. 每个选题具体可写，不要空泛
+3. 推荐最适合的标题风格（种草型/干货型/悬念型/数字型/情感型/对比型/清单型/故事型/热点型/提问型）
+4. hook 是一句话说明这条笔记的切入点/钩子
+5. 符合小红书调性，避免违规词
+
+## 输出格式
+严格输出 JSON 数组，7 个元素，不要 markdown 代码块：
+[
+  {"day": 1, "topic": "具体选题", "suggestedStyle": "种草型", "hook": "一句话切入点"},
+  ...
+]`;
+}
+
+export function buildSensitiveScanPrompt(text: string): string {
+  return `你是小红书内容合规审核专家，熟悉平台限流规则和广告法。
+
+## 任务
+审查以下小红书笔记文案，找出可能触发限流、违规或虚假宣传的用词。
+
+## 文案
+${text.slice(0, 2000)}
+
+## 要求
+1. 只标记确实有风险的词/短语，不要过度审查
+2. 每个给出更安全的替换建议
+3. 最多返回 8 条
+
+## 输出格式
+严格输出 JSON 数组，不要 markdown：
+[
+  {"word": "风险词", "suggestion": "替换建议", "reason": "简短原因"},
+  ...
+]
+若无风险，输出空数组 []`;
+}

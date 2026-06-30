@@ -21,7 +21,7 @@ export async function POST(request: Request) {
     }
 
     const isPro = isProUser(request);
-    const usage = consumeUsage(request, isPro);
+    const usage = await consumeUsage(request, isPro);
 
     if (!usage.allowed) {
       return NextResponse.json(

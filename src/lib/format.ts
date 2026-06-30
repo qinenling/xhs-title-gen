@@ -69,3 +69,22 @@ export function exportMarkdown(
   lines.push(``, `---`, `*由爆标题生成 · ${new Date().toLocaleDateString("zh-CN")}*`);
   return lines.join("\n");
 }
+
+/** 导出 CSV（Excel 可直接打开） */
+export function exportTitlesCsv(
+  topic: string,
+  titles: GeneratedTitle[]
+): string {
+  const header = "序号,爆款指数,风格,标题,点评";
+  const rows = titles.map((t, i) => {
+    const escape = (s: string) => `"${s.replace(/"/g, '""')}"`;
+    return [
+      i + 1,
+      t.score ?? "",
+      escape(t.style),
+      escape(t.title),
+      escape(t.reason),
+    ].join(",");
+  });
+  return `\uFEFF${header}\n${rows.join("\n")}\n主题,${topic}\n`;
+}

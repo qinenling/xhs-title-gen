@@ -1,9 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import type { TitleStyle } from "@/lib/types";
 import type { HistoryRecord } from "@/lib/history";
 import { fetchUsage, type UsageInfo } from "@/lib/client-usage";
 import { getTodayStats } from "@/lib/stats";
+import CalendarPanel from "./CalendarPanel";
 import FavoritesPanel from "./FavoritesPanel";
 import FeatureHighlights from "./FeatureHighlights";
 import HistoryPanel from "./HistoryPanel";
@@ -12,7 +14,7 @@ import ProModal from "./ProModal";
 import TitleGenerator, { type LimitReachedContext } from "./TitleGenerator";
 import UpgradePromptModal from "./UpgradePromptModal";
 
-type Tab = "generate" | "imitate" | "history" | "favorites";
+type Tab = "generate" | "imitate" | "calendar" | "history" | "favorites";
 
 interface ApiStatus {
   mode: "live" | "demo";
@@ -33,10 +35,12 @@ export default function HomeClient() {
   const [usage, setUsage] = useState<UsageInfo | null>(null);
   const [savedMinutes, setSavedMinutes] = useState(0);
   const [restoreKey, setRestoreKey] = useState(0);
+  const [copiedLink, setCopiedLink] = useState(false);
   const [restoreData, setRestoreData] = useState<{
     topic: string;
     keywords: string;
     prefillTitle?: string;
+    prefillStyle?: TitleStyle;
   } | null>(null);
 
   const refreshStats = useCallback(() => {
@@ -68,10 +72,30 @@ export default function HomeClient() {
     setTab("generate");
   }
 
-  function handleUseFavorite(title: string, favTopic: string) {
-    setRestoreData({ topic: favTopic, keywords: "", prefillTitle: title });
+  function handleUseFavorite(title: string, favTopic: string, style: TitleStyle) {
+    setRestoreData({
+      topic: favTopic,
+      keywords: "",
+      prefillTitle: title,
+      prefillStyle: style,
+    });
     setRestoreKey((k) => k + 1);
     setTab("generate");
+  }
+
+  function handleUseCalendarTopic(topic: string) {
+    setRestoreData({ topic, keywords: "" });
+    setRestoreKey((k) => k + 1);
+    setTab("generate");
+  }
+
+  async function handleShareSite() {
+    const url =
+      process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") ||
+      (typeof window !== "undefined" ? window.location.origin : "https://baotitle.asia");
+    await navigator.clipboard.writeText(url);
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 2000);
   }
 
   return (
@@ -83,7 +107,7 @@ export default function HomeClient() {
             <span className="text-lg font-bold text-rose-600">爆标题</span>
             {usage?.isPro && (
               <span className="rounded-full bg-gradient-to-r from-amber-400 to-orange-400 px-2 py-0.5 text-[10px] font-bold text-white">
-                PRO
+                PRO{usage.isLifetime !== false ? " · 永久" : ""}
               </span>
             )}
           </div>
@@ -127,6 +151,7 @@ export default function HomeClient() {
             [
               ["generate", "✨ 生成"],
               ["imitate", "🎯 仿写"],
+              ["calendar", "📅 日历"],
               ["history", "📋 历史"],
               ["favorites", "⭐ 收藏"],
             ] as const
@@ -142,6 +167,9 @@ export default function HomeClient() {
               }`}
             >
               {label}
+              {id === "calendar" && !usage?.isPro && (
+                <span className="ml-0.5 text-[9px] text-amber-500">Pro</span>
+              )}
             </button>
           ))}
         </div>
@@ -155,7 +183,7 @@ export default function HomeClient() {
                 小红书爆款标题生成器
               </h1>
               <p className="text-sm text-zinc-500 sm:text-base">
-                爆款指数 · 10 种风格 · 完整笔记包
+                爆款指数 · 手机预览 · 敏感词检测
               </p>
             </div>
 
@@ -165,6 +193,8 @@ export default function HomeClient() {
               key={restoreKey}
               initialTopic={restoreData?.topic}
               initialKeywords={restoreData?.keywords}
+              initialPrefillTitle={restoreData?.prefillTitle}
+              initialPrefillStyle={restoreData?.prefillStyle}
               isPro={usage?.isPro ?? false}
               onLimitReached={handleLimitReached}
               onUsageChange={setUsage}
@@ -186,6 +216,22 @@ export default function HomeClient() {
               onLimitReached={handleLimitReached}
               onUsageChange={setUsage}
               onStatsChange={refreshStats}
+            />
+          </>
+        ) : tab === "calendar" ? (
+          <>
+            <div className="mb-6 text-center">
+              <h1 className="mb-2 text-2xl font-bold tracking-tight text-zinc-900 sm:text-3xl">
+                7 日选题日历
+              </h1>
+              <p className="text-sm text-zinc-500 sm:text-base">
+                Pro 专属 · 规划一周内容，日更不再愁
+              </p>
+            </div>
+            <CalendarPanel
+              isPro={usage?.isPro ?? false}
+              onUpgrade={() => setProOpen(true)}
+              onUseTopic={handleUseCalendarTopic}
             />
           </>
         ) : tab === "history" ? (
@@ -210,9 +256,20 @@ export default function HomeClient() {
           </>
         )}
 
-        <footer className="mt-16 text-center text-xs text-zinc-400 space-y-1">
-          <p>{usage?.isPro ? "Pro 会员 · 感谢支持" : "免费版每日 10 次 · Pro 版无限生成"}</p>
+        <footer className="mt-16 text-center text-xs text-zinc-400 space-y-2">
+          <p>
+            {usage?.isPro
+              ? "Pro 永久会员 · 感谢支持"
+              : "免费版每日 10 次 · Pro 永久买断无限生成"}
+          </p>
           <p>爆标题 · baotitle.asia · 小红书创作者效率工具</p>
+          <button
+            type="button"
+            onClick={handleShareSite}
+            className="text-rose-400 hover:text-rose-600 hover:underline"
+          >
+            {copiedLink ? "链接已复制 ✓" : "复制网站链接分享给好友"}
+          </button>
         </footer>
       </main>
 

@@ -6,7 +6,10 @@ import { fetchUsage, type UsageInfo } from "@/lib/client-usage";
 import { FREE_TITLE_COUNT, PRO_TITLE_COUNT } from "@/lib/constants";
 import { recordGeneration, getTodayStats } from "@/lib/stats";
 import { getFavorites, toggleFavorite } from "@/lib/favorites";
+import { scanTitles } from "@/lib/sensitive-words";
 import LoadingSkeleton from "./LoadingSkeleton";
+import PhonePreviewModal from "./PhonePreviewModal";
+import SensitiveWordPanel from "./SensitiveWordPanel";
 import TitleCard from "./TitleCard";
 import type { LimitReachedContext } from "./TitleGenerator";
 
@@ -31,6 +34,7 @@ export default function ImitateGenerator({
   const [error, setError] = useState("");
   const [remaining, setRemaining] = useState<number | null>(null);
   const [favoriteTitles, setFavoriteTitles] = useState<Set<string>>(new Set());
+  const [previewTitle, setPreviewTitle] = useState<string | null>(null);
 
   const titleCount = isPro ? PRO_TITLE_COUNT : FREE_TITLE_COUNT;
 
@@ -201,6 +205,9 @@ export default function ImitateGenerator({
       {titles.length > 0 && (
         <div className="space-y-4">
           <h3 className="text-lg font-semibold text-zinc-800">仿写结果</h3>
+          <SensitiveWordPanel
+            hitsByTitle={scanTitles(titles.map((t) => t.title))}
+          />
           {titles.map((item, i) => (
             <TitleCard
               key={`${item.title}-${i}`}
@@ -209,10 +216,17 @@ export default function ImitateGenerator({
               favorited={favoriteTitles.has(item.title)}
               showRecommended={i === bestScoreIndex}
               onToggleFavorite={() => handleToggleFavorite(item)}
+              onPreview={() => setPreviewTitle(item.title)}
             />
           ))}
         </div>
       )}
+
+      <PhonePreviewModal
+        open={previewTitle !== null}
+        title={previewTitle || ""}
+        onClose={() => setPreviewTitle(null)}
+      />
     </div>
   );
 }

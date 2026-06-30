@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import type { GeneratedTitle, TitleStyle } from "@/lib/types";
+import { scanSensitiveText } from "@/lib/sensitive-words";
 import ViralScoreBar from "./ViralScoreBar";
 
 export const STYLE_COLORS: Record<TitleStyle, string> = {
@@ -17,6 +18,40 @@ export const STYLE_COLORS: Record<TitleStyle, string> = {
   提问型: "bg-cyan-100 text-cyan-700",
 };
 
+function TitleWithHighlights({ title }: { title: string }) {
+  const hits = scanSensitiveText(title);
+  if (hits.length === 0) return <>{title}</>;
+
+  const parts: ReactNode[] = [];
+  let cursor = 0;
+
+  for (const hit of hits) {
+    if (hit.index > cursor) {
+      parts.push(title.slice(cursor, hit.index));
+    }
+    parts.push(
+      <mark
+        key={`${hit.index}-${hit.word}`}
+        className={`rounded px-0.5 ${
+          hit.severity === "high"
+            ? "bg-red-100 text-red-700"
+            : "bg-amber-100 text-amber-700"
+        }`}
+        title={`建议：${hit.suggestion}`}
+      >
+        {hit.word}
+      </mark>
+    );
+    cursor = hit.index + hit.word.length;
+  }
+
+  if (cursor < title.length) {
+    parts.push(title.slice(cursor));
+  }
+
+  return <>{parts}</>;
+}
+
 export default function TitleCard({
   item,
   index,
@@ -27,6 +62,9 @@ export default function TitleCard({
   showRecommended = false,
   onGenerateOutline,
   onToggleFavorite,
+  onPreview,
+  onCompareToggle,
+  compareSelected = false,
 }: {
   item: GeneratedTitle;
   index: number;
@@ -37,10 +75,14 @@ export default function TitleCard({
   showRecommended?: boolean;
   onGenerateOutline?: () => void;
   onToggleFavorite?: () => void;
+  onPreview?: () => void;
+  compareSelected?: boolean;
+  onCompareToggle?: () => void;
 }) {
   const [copied, setCopied] = useState(false);
   const charCount = [...item.title].length;
   const score = item.score ?? 75;
+  const sensitiveHits = scanSensitiveText(item.title);
 
   async function handleCopy() {
     await navigator.clipboard.writeText(item.title);
@@ -51,9 +93,13 @@ export default function TitleCard({
   return (
     <div
       className={`group rounded-2xl border bg-white shadow-sm transition hover:shadow-md ${
-        selected
+        compareSelected
+          ? "border-blue-400 ring-2 ring-blue-100"
+          : selected
           ? "border-rose-400 ring-2 ring-rose-100"
-          : "border-rose-100 hover:border-rose-200"
+          : sensitiveHits.length > 0
+            ? "border-orange-200 hover:border-orange-300"
+            : "border-rose-100 hover:border-rose-200"
       } ${compact ? "p-4" : "p-5"}`}
     >
       <div className="mb-3 flex items-center justify-between gap-2">
@@ -62,6 +108,11 @@ export default function TitleCard({
           {showRecommended && (
             <span className="rounded-full bg-gradient-to-r from-amber-400 to-orange-400 px-2 py-0.5 text-[10px] font-bold text-white">
               推荐
+            </span>
+          )}
+          {sensitiveHits.length > 0 && (
+            <span className="rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-medium text-orange-700">
+              敏感词 {sensitiveHits.length}
             </span>
           )}
         </div>
@@ -94,7 +145,7 @@ export default function TitleCard({
           compact ? "text-base" : "text-lg"
         }`}
       >
-        {item.title}
+        <TitleWithHighlights title={item.title} />
       </p>
 
       {!compact && (
@@ -105,9 +156,31 @@ export default function TitleCard({
         <span
           className={`text-xs ${charCount > 25 ? "text-orange-500" : "text-zinc-400"}`}
         >
-          {charCount} 字{charCount > 25 ? "（偏长）" : ""}
+          {charCount} 字{charCount > 25 ? "（偏长，信息流可能截断）" : ""}
         </span>
         <div className="flex gap-2">
+          {!compact && onCompareToggle && (
+            <button
+              type="button"
+              onClick={onCompareToggle}
+              className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition ${
+                compareSelected
+                  ? "border-blue-400 bg-blue-50 text-blue-600"
+                  : "border-zinc-200 text-zinc-500 hover:bg-zinc-50"
+              }`}
+            >
+              {compareSelected ? "已选 ✓" : "对比"}
+            </button>
+          )}
+          {!compact && onPreview && (
+            <button
+              type="button"
+              onClick={onPreview}
+              className="rounded-lg border border-zinc-200 px-3 py-1.5 text-sm font-medium text-zinc-600 transition hover:bg-zinc-50"
+            >
+              📱 预览
+            </button>
+          )}
           {!compact && onGenerateOutline && (
             <button
               type="button"
