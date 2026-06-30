@@ -1,0 +1,425 @@
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import type { GeneratedTitle, NoteOutline, TitleStyle } from "@/lib/types";
+import { TITLE_STYLES, DEFAULT_STYLES } from "@/lib/types";
+import { saveToHistory } from "@/lib/history";
+import { fetchUsage, type UsageInfo } from "@/lib/client-usage";
+import { FREE_TITLE_COUNT, PRO_TITLE_COUNT } from "@/lib/constants";
+import { exportMarkdown, outlineToText } from "@/lib/format";
+import { getFavorites, toggleFavorite } from "@/lib/favorites";
+import LoadingSkeleton from "./LoadingSkeleton";
+import OutlinePanel from "./OutlinePanel";
+import TitleCard from "./TitleCard";
+import TopicTemplates from "./TopicTemplates";
+
+interface TitleGeneratorProps {
+  initialTopic?: string;
+  initialKeywords?: string;
+  isPro?: boolean;
+  onLimitReached?: () => void;
+  onUsageChange?: (usage: UsageInfo) => void;
+}
+
+export default function TitleGenerator({
+  initialTopic = "",
+  initialKeywords = "",
+  isPro = false,
+  onLimitReached,
+  onUsageChange,
+}: TitleGeneratorProps) {
+  const [topic, setTopic] = useState(initialTopic);
+  const [keywords, setKeywords] = useState(initialKeywords);
+  const [styles, setStyles] = useState<TitleStyle[]>([...DEFAULT_STYLES]);
+  const [titles, setTitles] = useState<GeneratedTitle[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [remaining, setRemaining] = useState<number | null>(null);
+  const [copiedAll, setCopiedAll] = useState(false);
+
+  const [outline, setOutline] = useState<NoteOutline | null>(null);
+  const [outlineTitle, setOutlineTitle] = useState("");
+  const [outlineLoadingIndex, setOutlineLoadingIndex] = useState<number | null>(
+    null
+  );
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const [exported, setExported] = useState(false);
+  const [mdExported, setMdExported] = useState(false);
+  const [favoriteTitles, setFavoriteTitles] = useState<Set<string>>(new Set());
+
+  const titleCount = isPro ? PRO_TITLE_COUNT : FREE_TITLE_COUNT;
+
+  const refreshUsage = useCallback(async () => {
+    const usage = await fetchUsage();
+    setRemaining(usage.isPro ? null : usage.remaining);
+    onUsageChange?.(usage);
+  }, [onUsageChange]);
+
+  useEffect(() => {
+    refreshUsage();
+    setFavoriteTitles(new Set(getFavorites().map((f) => f.title)));
+  }, [refreshUsage, isPro]);
+
+  useEffect(() => {
+    if (initialTopic) setTopic(initialTopic);
+    if (initialKeywords) setKeywords(initialKeywords);
+  }, [initialTopic, initialKeywords]);
+
+  function toggleStyle(style: TitleStyle) {
+    setStyles((prev) => {
+      if (prev.includes(style)) {
+        if (prev.length <= 1) return prev;
+        return prev.filter((s) => s !== style);
+      }
+      return [...prev, style];
+    });
+  }
+
+  function applyTemplate(t: string, k: string) {
+    setTopic(t);
+    setKeywords(k);
+    setOutline(null);
+    setSelectedIndex(null);
+  }
+
+  function handleLimitError(res: Response, data: { error?: string }) {
+    if (res.status === 429) {
+      setRemaining(0);
+      onLimitReached?.();
+    }
+    throw new Error(data.error || "请求失败");
+  }
+
+  async function runGenerate(clearPrevious: boolean) {
+    setError("");
+
+    if (!topic.trim()) {
+      setError("请先填写笔记主题");
+      return;
+    }
+
+    if (!isPro && remaining === 0) {
+      setError("今日免费次数已用完");
+      onLimitReached?.();
+      return;
+    }
+
+    setLoading(true);
+    if (clearPrevious) {
+      setTitles([]);
+      setOutline(null);
+      setSelectedIndex(null);
+    }
+
+    try {
+      const res = await fetch("/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          topic: topic.trim(),
+          keywords: keywords.trim(),
+          styles,
+          count: titleCount,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        handleLimitError(res, data);
+      }
+
+      setTitles(data.titles);
+      if (data.isPro) {
+        setRemaining(null);
+      } else {
+        setRemaining(data.remaining);
+      }
+      onUsageChange?.({
+        isPro: data.isPro,
+        remaining: data.remaining,
+        used: 0,
+        limit: 10,
+      });
+      saveToHistory(topic.trim(), keywords.trim(), data.titles);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "生成失败，请重试");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleGenerateOutline(item: GeneratedTitle, index: number) {
+    setError("");
+
+    if (!isPro && remaining === 0) {
+      setError("今日免费次数已用完");
+      onLimitReached?.();
+      return;
+    }
+
+    setOutlineLoadingIndex(index);
+    setSelectedIndex(index);
+    setOutline(null);
+
+    try {
+      const res = await fetch("/api/outline", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          topic: topic.trim(),
+          keywords: keywords.trim(),
+          title: item.title,
+          style: item.style,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        handleLimitError(res, data);
+      }
+
+      setOutline(data.outline);
+      setOutlineTitle(item.title);
+      if (data.isPro) {
+        setRemaining(null);
+      } else {
+        setRemaining(data.remaining);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "大纲生成失败，请重试");
+      setSelectedIndex(null);
+    } finally {
+      setOutlineLoadingIndex(null);
+    }
+  }
+
+  async function handleCopyAll() {
+    const text = titles
+      .map((t, i) => `${i + 1}. [${t.style}] ${t.title}`)
+      .join("\n");
+    await navigator.clipboard.writeText(text);
+    setCopiedAll(true);
+    setTimeout(() => setCopiedAll(false), 2000);
+  }
+
+  async function handleExportMarkdown() {
+    const md = exportMarkdown(
+      topic.trim(),
+      keywords.trim(),
+      titles,
+      outline,
+      outlineTitle
+    );
+    const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `爆标题-${topic.trim().slice(0, 10) || "笔记"}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setMdExported(true);
+    setTimeout(() => setMdExported(false), 2000);
+  }
+
+  function handleToggleFavorite(item: GeneratedTitle) {
+    toggleFavorite(item, topic.trim());
+    setFavoriteTitles(new Set(getFavorites().map((f) => f.title)));
+  }
+
+  async function handleExportPackage() {
+    if (!outline) return;
+    const text = outlineToText(outline, outlineTitle);
+    const allTitles = titles
+      .map((t, i) => `${i + 1}. [${t.style}] ${t.title}`)
+      .join("\n");
+    const pack = `【备选标题】\n${allTitles}\n\n【正文】\n${text}`;
+    await navigator.clipboard.writeText(pack);
+    setExported(true);
+    setTimeout(() => setExported(false), 2000);
+  }
+
+  return (
+    <div className="mx-auto w-full max-w-2xl">
+      <div className="mb-8 rounded-2xl border border-rose-100 bg-white p-6 shadow-sm">
+        <TopicTemplates onSelect={applyTemplate} />
+
+        <label className="mb-2 block text-sm font-medium text-zinc-700">
+          笔记主题 <span className="text-rose-500">*</span>
+        </label>
+        <input
+          type="text"
+          value={topic}
+          onChange={(e) => setTopic(e.target.value)}
+          placeholder="例如：平价 skincare 入门、周末杭州两日游"
+          className="mb-4 w-full rounded-xl border border-zinc-200 px-4 py-3 text-zinc-900 placeholder:text-zinc-400 focus:border-rose-400 focus:outline-none focus:ring-2 focus:ring-rose-100"
+          maxLength={100}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !loading) runGenerate(true);
+          }}
+        />
+
+        <label className="mb-2 block text-sm font-medium text-zinc-700">
+          关键词 / 卖点（选填）
+        </label>
+        <input
+          type="text"
+          value={keywords}
+          onChange={(e) => setKeywords(e.target.value)}
+          placeholder="例如：学生党、百元内、油皮友好"
+          className="mb-4 w-full rounded-xl border border-zinc-200 px-4 py-3 text-zinc-900 placeholder:text-zinc-400 focus:border-rose-400 focus:outline-none focus:ring-2 focus:ring-rose-100"
+          maxLength={80}
+        />
+
+        <div className="mb-2 flex items-center justify-between">
+          <label className="text-sm font-medium text-zinc-700">标题风格</label>
+          <div className="flex gap-2 text-xs">
+            <button
+              type="button"
+              onClick={() => setStyles([...DEFAULT_STYLES])}
+              className="text-rose-500 hover:underline"
+            >
+              常用5种
+            </button>
+            <button
+              type="button"
+              onClick={() => setStyles([...TITLE_STYLES])}
+              className="text-zinc-400 hover:text-rose-500 hover:underline"
+            >
+              全选10种
+            </button>
+          </div>
+        </div>
+        <div className="mb-6 flex flex-wrap gap-2">
+          {TITLE_STYLES.map((style) => {
+            const active = styles.includes(style);
+            return (
+              <button
+                key={style}
+                type="button"
+                onClick={() => toggleStyle(style)}
+                className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition ${
+                  active
+                    ? "bg-rose-500 text-white shadow-sm"
+                    : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
+                }`}
+              >
+                {style}
+              </button>
+            );
+          })}
+        </div>
+
+        <button
+          type="button"
+          onClick={() => runGenerate(true)}
+          disabled={loading}
+          className="w-full rounded-xl bg-gradient-to-r from-rose-500 to-pink-500 py-3.5 text-base font-semibold text-white shadow-md transition hover:from-rose-600 hover:to-pink-600 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {loading
+            ? "正在生成爆款标题…"
+            : `✨ 生成 ${titleCount} 条标题`}
+        </button>
+
+        {error && (
+          <p className="mt-3 text-center text-sm text-red-500">{error}</p>
+        )}
+
+        <p className="mt-3 text-center text-xs text-zinc-400">
+          {isPro ? (
+            <span className="text-rose-500 font-medium">👑 Pro 会员 · 无限生成</span>
+          ) : (
+            <>
+              今日剩余：{remaining ?? "…"} / 10 次
+              {remaining !== null && remaining <= 3 && remaining > 0 && (
+                <button
+                  type="button"
+                  onClick={() => onLimitReached?.()}
+                  className="ml-2 text-rose-500 hover:underline"
+                >
+                  升级 Pro
+                </button>
+              )}
+            </>
+          )}
+        </p>
+      </div>
+
+      {loading && titles.length === 0 && <LoadingSkeleton />}
+
+      {titles.length > 0 && (
+        <div>
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold text-zinc-800">生成结果</h2>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={handleCopyAll}
+                className="rounded-lg border border-rose-200 px-3 py-1.5 text-sm font-medium text-rose-600 hover:bg-rose-50 transition"
+              >
+                {copiedAll ? "已复制全部 ✓" : "复制全部"}
+              </button>
+              <button
+                type="button"
+                onClick={() => runGenerate(true)}
+                disabled={loading}
+                className="rounded-lg bg-zinc-100 px-3 py-1.5 text-sm font-medium text-zinc-600 hover:bg-zinc-200 transition disabled:opacity-50"
+              >
+                换一批
+              </button>
+            </div>
+          </div>
+
+          <p className="mb-4 text-sm text-zinc-500">
+            选中一条标题，点击「写正文」生成完整大纲
+          </p>
+
+          <div className="space-y-4">
+            {titles.map((item, i) => (
+              <TitleCard
+                key={`${item.title}-${i}`}
+                item={item}
+                index={i}
+                selected={selectedIndex === i}
+                outlineLoading={outlineLoadingIndex === i}
+                favorited={favoriteTitles.has(item.title)}
+                onToggleFavorite={() => handleToggleFavorite(item)}
+                onGenerateOutline={() => handleGenerateOutline(item, i)}
+              />
+            ))}
+          </div>
+
+          {outline && (
+            <>
+              <div className="mt-4 flex flex-wrap justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={handleExportMarkdown}
+                  className="rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-50 transition"
+                >
+                  {mdExported ? "已下载 Markdown ✓" : "📄 导出 Markdown"}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExportPackage}
+                  className="rounded-lg bg-violet-50 px-4 py-2 text-sm font-medium text-violet-600 hover:bg-violet-100 transition"
+                >
+                  {exported ? "已复制全套素材 ✓" : "📦 复制全套（标题+正文）"}
+                </button>
+              </div>
+              <OutlinePanel
+                outline={outline}
+                title={outlineTitle}
+                onClose={() => {
+                  setOutline(null);
+                  setSelectedIndex(null);
+                }}
+              />
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
